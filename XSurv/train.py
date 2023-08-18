@@ -109,7 +109,7 @@ def train(data_dir,
     Weights = [1.0, 1.0, 1.0, 1.0]
     
     # data generator
-    data_gen = datagenerators.gen_rtload(data_dir, train_samples, batch_size=batch_size, balance_class=True)
+    data_gen = datagenerators.gen_load(data_dir, train_samples, batch_size=batch_size, balance_censored_sample=True)
     train_gen = datagenerators.gen_process(data_gen)
     
     # training/validation loops
@@ -152,32 +152,32 @@ def train(data_dir,
             
        # validation
         model.eval()
-        T_inter = T_union = 0
-        N_inter = N_union = 0
+        PT_inter = PT_union = 0
+        MLN_inter = MLN_union = 0
         Survival_time = []
         Survival_label = []
         for valid_image in valid_samples:
             
             # generate inputs (and true outputs) and convert them to tensors
-            PT, CT, Seg_T, Seg_N, Label = datagenerators.load_by_name(data_dir, valid_image)
-            PT = torch.from_numpy(PT).to(device).float()
+            PET, CT, Seg_PT, Seg_MLN, Label = datagenerators.load_by_name(data_dir, valid_image)
+            PET = torch.from_numpy(PET).to(device).float()
             CT = torch.from_numpy(CT).to(device).float()
             Survival_label.append(Label)
 
             # run inputs through the model to produce a warped image and flow field
             with torch.no_grad():
-                pred = model(PT, CT)
+                pred = model(PET, CT)
 
             # calculate validation metrics
-            Seg_T_pred = pred[0].detach().cpu().numpy().squeeze()
-            _, Seg_T_pred = cv2.threshold(Seg_T_pred,0.5,1,cv2.THRESH_BINARY)
-            T_inter = T_inter + np.sum(Seg_T_pred * Seg_T)
-            T_union = T_union + np.sum(Seg_T_pred + Seg_T)
+            Seg_PT_pred = pred[0].detach().cpu().numpy().squeeze()
+            _, Seg_PT_pred = cv2.threshold(Seg_PT_pred,0.5,1,cv2.THRESH_BINARY)
+            PT_inter = PT_inter + np.sum(Seg_PT_pred * Seg_PT)
+            PT_union = PT_union + np.sum(Seg_PT_pred + Seg_PT)
         
-            Seg_N_pred = pred[1].detach().cpu().numpy().squeeze()
-            _, Seg_N_pred = cv2.threshold(Seg_N_pred,0.5,1,cv2.THRESH_BINARY)
-            N_inter = N_inter + np.sum(Seg_N_pred * Seg_N)
-            N_union = N_union + np.sum(Seg_N_pred + Seg_N)
+            Seg_MLN_pred = pred[1].detach().cpu().numpy().squeeze()
+            _, Seg_MLN_pred = cv2.threshold(Seg_MLN_pred,0.5,1,cv2.THRESH_BINARY)
+            MLN_inter = MLN_inter + np.sum(Seg_MLN_pred * Seg_MLN)
+            MLN_union = MLN_union + np.sum(Seg_MLN_pred + Seg_MLN)
             
             Survival_pred = pred[2].detach().cpu().numpy().squeeze()
             Survival_time.append(Get_survival_time(Survival_pred))
@@ -187,8 +187,8 @@ def train(data_dir,
         time_info = 'Total %.2f sec' % (time.time() - start_time)
         train_losses = ', '.join(['%.4f' % f for f in np.mean(train_losses, axis=0)])
         train_loss_info = 'Train loss: %.4f (%s)' % (np.mean(train_total_loss), train_losses)
-        Dice_T, Dice_N = 2*T_inter/T_union, 2*N_inter/N_union
-        valid_dice_info = 'Valid DSC: %.4f (%.4f, %.4f)' % (np.mean([Dice_T, Dice_N]), Dice_T, Dice_N)
+        Dice_PT, Dice_MLN = 2*PT_inter/PT_union, 2*MLN_inter/MLN_union
+        valid_dice_info = 'Valid DSC: %.4f (%.4f, %.4f)' % (np.mean([Dice_PT, Dice_MLN]), Dice_PT, Dice_MLN)
         valid_cindex = concordance_index(np.array(Survival_label)[:,0], Survival_time, np.array(Survival_label)[:,1])
         valid_cindex_info = 'Valid C-index: %.4f' % valid_cindex
         print(' - '.join((epoch_info, time_info, train_loss_info, valid_dice_info, valid_cindex_info)), flush=True)
@@ -221,7 +221,7 @@ if __name__ == "__main__":
                         dest="initial_epoch", default=0,
                         help="initial_epoch")
     parser.add_argument("--epochs", type=int,
-                        dest="epochs", default=100,
+                        dest="epochs", default=60,
                         help="number of epoch")
     parser.add_argument("--steps_per_epoch", type=int,
                         dest="steps_per_epoch", default=200,

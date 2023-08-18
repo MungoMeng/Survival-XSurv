@@ -11,457 +11,149 @@ import torch.utils.checkpoint as checkpoint
     
 class XSurv(nn.Module):
 
-    def __init__(self, channel_num=12, use_checkpoint=False):
+    def __init__(self, channel_num=16, use_checkpoint=False):
         super().__init__()
         
-        self.Colearn_encoder = Colearn_encoder(channel_num=channel_num//2, 
+        self.Merging_encoder = Merging_encoder(channel_num=channel_num//2,
                                                use_checkpoint=use_checkpoint)
-        self.CoAtten_decoder = CoAtten_decoder(in_channels=channel_num, 
-                                               channel_num=channel_num//2, 
-                                               use_checkpoint=use_checkpoint)
+        self.Diverging_decoder = Diverging_decoder(in_channels=channel_num,
+                                                   channel_num=channel_num//2,
+                                                   use_checkpoint=use_checkpoint)
         self.Surv_head = Surv_head(channel_num=channel_num,
                                    interval_num=10)
         
-    def forward(self, PT, CT):
+    def forward(self, PET, CT):
 
-        x_1, x_2, x_3, x_4, x_5 = self.Colearn_encoder(PT, CT)
-        Seg_T_pred, Seg_N_pred, Surv_feature = self.CoAtten_decoder(x_1, x_2, x_3, x_4, x_5)
+        x_1, x_2, x_3, x_4, x_5 = self.Merging_encoder(PET, CT)
+        Seg_PT_pred, Seg_MLN_pred, Surv_feature = self.Diverging_decoder(x_1, x_2, x_3, x_4, x_5)
         Surv_pred, Reg_weight = self.Surv_head(Surv_feature)
         
-        return [Seg_T_pred, Seg_N_pred, Surv_pred, Reg_weight]
-    
-    
-class NLAEncoder(nn.Module):
-
-    def __init__(self, channel_num=12, use_checkpoint=False):
-        super().__init__()
-        
-        self.NLA_encoder = NLA_encoder(channel_num=channel_num//2, 
-                                       use_checkpoint=use_checkpoint)
-        self.CoAtten_decoder = CoAtten_decoder(in_channels=channel_num, 
-                                               channel_num=channel_num//2, 
-                                               use_checkpoint=use_checkpoint)
-        self.Surv_head = Surv_head(channel_num=channel_num,
-                                   interval_num=10)
-        
-    def forward(self, PT, CT):
-
-        x_1, x_2, x_3, x_4, x_5 = self.NLA_encoder(PT, CT)
-        Seg_T_pred, Seg_N_pred, Surv_feature = self.CoAtten_decoder(x_1, x_2, x_3, x_4, x_5)
-        Surv_pred, Reg_weight = self.Surv_head(Surv_feature)
-        
-        return [Seg_T_pred, Seg_N_pred, Surv_pred, Reg_weight]
-    
-    
-class SingleEncoder(nn.Module):
-
-    def __init__(self, channel_num=12, use_checkpoint=False):
-        super().__init__()
-        
-        self.Conv_encoder = Conv_encoder(in_channels=2, 
-                                         channel_num=channel_num, 
-                                         use_checkpoint=use_checkpoint)
-        self.CoAtten_decoder = CoAtten_decoder(in_channels=channel_num, 
-                                               channel_num=channel_num//2, 
-                                               use_checkpoint=use_checkpoint)
-        self.Surv_head = Surv_head(channel_num=channel_num,
-                                   interval_num=10)
-        
-    def forward(self, PT, CT):
-
-        x_1, x_2, x_3, x_4, x_5 = self.Conv_encoder([PT, CT])
-        Seg_T_pred, Seg_N_pred, Surv_feature = self.CoAtten_decoder(x_1, x_2, x_3, x_4, x_5)
-        Surv_pred, Reg_weight = self.Surv_head(Surv_feature)
-        
-        return [Seg_T_pred, Seg_N_pred, Surv_pred, Reg_weight]
-    
-    
-class DoubleEncoder(nn.Module):
-
-    def __init__(self, channel_num=12, use_checkpoint=False):
-        super().__init__()
-        
-        self.PT_encoder = Conv_encoder(in_channels=1, 
-                                       channel_num=channel_num//2, 
-                                       use_checkpoint=use_checkpoint)
-        self.CT_encoder = Conv_encoder(in_channels=1, 
-                                       channel_num=channel_num//2, 
-                                       use_checkpoint=use_checkpoint)
-        self.CoAtten_decoder = CoAtten_decoder(in_channels=channel_num, 
-                                               channel_num=channel_num//2, 
-                                               use_checkpoint=use_checkpoint)
-        self.Surv_head = Surv_head(channel_num=channel_num,
-                                   interval_num=10)
-        
-    def forward(self, PT, CT):
-
-        x_PT_1, x_PT_2, x_PT_3, x_PT_4, x_PT_5 = self.PT_encoder(PT)
-        x_CT_1, x_CT_2, x_CT_3, x_CT_4, x_CT_5 = self.CT_encoder(CT)
-        
-        x_1 = torch.cat([x_PT_1, x_CT_1], dim=1)
-        x_2 = torch.cat([x_PT_2, x_CT_2], dim=1)
-        x_3 = torch.cat([x_PT_3, x_CT_3], dim=1)
-        x_4 = torch.cat([x_PT_4, x_CT_4], dim=1)
-        x_5 = torch.cat([x_PT_5, x_CT_5], dim=1)
-        
-        Seg_T_pred, Seg_N_pred, Surv_feature = self.CoAtten_decoder(x_1, x_2, x_3, x_4, x_5)
-        Surv_pred, Reg_weight = self.Surv_head(Surv_feature)
-        
-        return [Seg_T_pred, Seg_N_pred, Surv_pred, Reg_weight]
-    
-    
-class SingleDecoder(nn.Module):
-
-    def __init__(self, channel_num=12, use_checkpoint=False):
-        super().__init__()
-        
-        self.Colearn_encoder = Colearn_encoder(channel_num=channel_num//2, 
-                                               use_checkpoint=use_checkpoint)
-        self.Conv_decoder = Conv_decoder(in_channels=channel_num, 
-                                         channel_num=channel_num, 
-                                         out_channels=2,
-                                         use_checkpoint=use_checkpoint)
-        self.Surv_head = Surv_head(channel_num=channel_num,
-                                   interval_num=10)
-        
-    def forward(self, PT, CT):
-
-        x_1, x_2, x_3, x_4, x_5 = self.Colearn_encoder(PT, CT)
-        Seg_pred, x_6, x_7, x_8, x_9 = self.Conv_decoder(x_1, x_2, x_3, x_4, x_5)
-        Surv_pred, Reg_weight = self.Surv_head([x_6, x_7, x_8, x_9])
-        Seg_T_pred = Seg_pred[:,0:1,:,:,:]
-        Seg_N_pred = Seg_pred[:,1:2,:,:,:]
-        
-        return [Seg_T_pred, Seg_N_pred, Surv_pred, Reg_weight]
-    
-    
-class DoubleDecoder(nn.Module):
-
-    def __init__(self, channel_num=12, use_checkpoint=False):
-        super().__init__()
-        
-        self.Colearn_encoder = Colearn_encoder(channel_num=channel_num//2, 
-                                               use_checkpoint=use_checkpoint)
-        self.Conv_decoder_T = Conv_decoder(in_channels=channel_num, 
-                                           channel_num=channel_num//2, 
-                                           out_channels=1, 
-                                           use_checkpoint=use_checkpoint)
-        self.Conv_decoder_N = Conv_decoder(in_channels=channel_num, 
-                                          channel_num=channel_num//2, 
-                                          out_channels=1, 
-                                          use_checkpoint=use_checkpoint)
-        self.Surv_head = Surv_head(channel_num=channel_num,
-                                   interval_num=10)
-        
-    def forward(self, PT, CT):
-
-        x_1, x_2, x_3, x_4, x_5 = self.Colearn_encoder(PT, CT)
-        Seg_T_pred, x_T_6, x_T_7, x_T_8, x_T_9 = self.Conv_decoder_T(x_1, x_2, x_3, x_4, x_5)
-        Seg_N_pred, x_N_6, x_N_7, x_N_8, x_N_9 = self.Conv_decoder_N(x_1, x_2, x_3, x_4, x_5)
-        Surv_pred, Reg_weight = self.Surv_head([x_T_6, x_T_7, x_T_8, x_T_9, x_N_6, x_N_7, x_N_8, x_N_9])
-        
-        return [Seg_T_pred, Seg_N_pred, Surv_pred, Reg_weight]
-    
+        return [Seg_PT_pred, Seg_MLN_pred, Surv_pred, Reg_weight]
 
 #-------------------------------------------------------------------------------------- 
     
-class Colearn_encoder(nn.Module):
+class Merging_encoder(nn.Module):
 
     def __init__(self, 
                  channel_num: int, 
                  use_checkpoint: bool = False):
         super().__init__()
         
-        self.PT_encoder_1 = Residual_block(in_channels=1, 
-                                           out_channels=channel_num, 
-                                           conv_num=2, 
-                                           use_checkpoint=use_checkpoint)
+        self.PET_encoder_1 = Residual_block(in_channels=1,
+                                            out_channels=channel_num,
+                                            conv_num=2,
+                                            use_checkpoint=use_checkpoint)
         self.CT_encoder_1 = Residual_block(in_channels=1, 
                                            out_channels=channel_num, 
                                            conv_num=2, 
                                            use_checkpoint=use_checkpoint)
-        self.PT_encoder_2 = Hybrid_block(in_channels=channel_num, 
-                                         embed_dim=channel_num*2, 
-                                         conv_num=3,
-                                         num_layers=2,
-                                         num_heads=channel_num//4,
-                                         window_size=[5,5,5],
-                                         use_checkpoint=use_checkpoint)
-        self.CT_encoder_2 = Hybrid_block(in_channels=channel_num, 
-                                         embed_dim=channel_num*2, 
-                                         conv_num=3,
-                                         num_layers=2,
-                                         num_heads=channel_num//4,
-                                         window_size=[5,5,5],
-                                         use_checkpoint=use_checkpoint)
-        self.PT_encoder_3 = Colearn_Hybrid_block(in_channels=channel_num*2, 
-                                                 embed_dim=channel_num*4, 
-                                                 conv_num=3,
-                                                 num_layers=2,
-                                                 num_heads=channel_num//2,
-                                                 window_size=[5,5,5],
-                                                 use_checkpoint=use_checkpoint)
-        self.CT_encoder_3 = Colearn_Hybrid_block(in_channels=channel_num*2, 
-                                                 embed_dim=channel_num*4, 
-                                                 conv_num=3,
-                                                 num_layers=2,
-                                                 num_heads=channel_num//2,
-                                                 window_size=[5,5,5],
-                                                 use_checkpoint=use_checkpoint)
-        self.PT_encoder_4 = Colearn_Hybrid_block(in_channels=channel_num*4, 
-                                                 embed_dim=channel_num*8, 
-                                                 conv_num=4,
-                                                 num_layers=2,
-                                                 num_heads=channel_num,
-                                                 window_size=[5,5,5],
-                                                 use_checkpoint=use_checkpoint)
-        self.CT_encoder_4 = Colearn_Hybrid_block(in_channels=channel_num*4, 
-                                                 embed_dim=channel_num*8, 
-                                                 conv_num=4,
-                                                 num_layers=2,
-                                                 num_heads=channel_num,
-                                                 window_size=[5,5,5],
-                                                 use_checkpoint=use_checkpoint)
-        self.PT_encoder_5 = Colearn_Hybrid_block(in_channels=channel_num*8, 
-                                                 embed_dim=channel_num*16, 
-                                                 conv_num=4,
-                                                 num_layers=2,
-                                                 num_heads=channel_num*2,
-                                                 window_size=[5,5,5],
-                                                 use_checkpoint=use_checkpoint)
-        self.CT_encoder_5 = Colearn_Hybrid_block(in_channels=channel_num*8, 
-                                                 embed_dim=channel_num*16, 
-                                                 conv_num=4,
-                                                 num_layers=2,
-                                                 num_heads=channel_num*2,
-                                                 window_size=[5,5,5],
-                                                 use_checkpoint=use_checkpoint)
+        self.PET_encoder_2 = Self_Hybrid_block(in_channels=channel_num,
+                                               embed_dim=channel_num*2,
+                                               conv_num=3,
+                                               num_layers=2,
+                                               num_heads=channel_num//4,
+                                               window_size=[5,5,5],
+                                               use_checkpoint=use_checkpoint)
+        self.CT_encoder_2 = Self_Hybrid_block(in_channels=channel_num,
+                                              embed_dim=channel_num*2,
+                                              conv_num=3,
+                                              num_layers=2,
+                                              num_heads=channel_num//4,
+                                              window_size=[5,5,5],
+                                              use_checkpoint=use_checkpoint)
+        self.PET_encoder_3 = Cross_Hybrid_block(in_channels=channel_num*2,
+                                                embed_dim=channel_num*4,
+                                                conv_num=3,
+                                                num_layers=2,
+                                                num_heads=channel_num//2,
+                                                window_size=[5,5,5],
+                                                use_checkpoint=use_checkpoint)
+        self.CT_encoder_3 = Cross_Hybrid_block(in_channels=channel_num*2,
+                                               embed_dim=channel_num*4,
+                                               conv_num=3,
+                                               num_layers=2,
+                                               num_heads=channel_num//2,
+                                               window_size=[5,5,5],
+                                               use_checkpoint=use_checkpoint)
+        self.PET_encoder_4 = Cross_Hybrid_block(in_channels=channel_num*4,
+                                                embed_dim=channel_num*8,
+                                                conv_num=4,
+                                                num_layers=2,
+                                                num_heads=channel_num,
+                                                window_size=[5,5,5],
+                                                use_checkpoint=use_checkpoint)
+        self.CT_encoder_4 = Cross_Hybrid_block(in_channels=channel_num*4,
+                                               embed_dim=channel_num*8,
+                                               conv_num=4,
+                                               num_layers=2,
+                                               num_heads=channel_num,
+                                               window_size=[5,5,5],
+                                               use_checkpoint=use_checkpoint)
+        self.PET_encoder_5 = Cross_Hybrid_block(in_channels=channel_num*8,
+                                                embed_dim=channel_num*16,
+                                                conv_num=4,
+                                                num_layers=2,
+                                                num_heads=channel_num*2,
+                                                window_size=[5,5,5],
+                                                use_checkpoint=use_checkpoint)
+        self.CT_encoder_5 = Cross_Hybrid_block(in_channels=channel_num*8,
+                                               embed_dim=channel_num*16,
+                                               conv_num=4,
+                                               num_layers=2,
+                                               num_heads=channel_num*2,
+                                               window_size=[5,5,5],
+                                               use_checkpoint=use_checkpoint)
         
         self.downsample_1 = nn.MaxPool3d(2, stride=2)
         self.downsample_2 = nn.MaxPool3d(2, stride=2)
         self.downsample_3 = nn.MaxPool3d(2, stride=2)
         self.downsample_4 = nn.MaxPool3d(2, stride=2)
         
-    def forward(self, PT, CT):
+    def forward(self, PET, CT):
         
         # full scale
-        x_PT_1 = self.PT_encoder_1(PT)
+        x_PET_1 = self.PET_encoder_1(PET)
         x_CT_1 = self.CT_encoder_1(CT)
         
         # downsample 1/2 scale
-        x_PT = self.downsample_1(x_PT_1)
+        x_PET = self.downsample_1(x_PET_1)
         x_CT = self.downsample_1(x_CT_1)
         
-        x_PT_2 = self.PT_encoder_2(x_PT)
+        x_PET_2 = self.PET_encoder_2(x_PET)
         x_CT_2 = self.CT_encoder_2(x_CT)
         
         # downsample 1/4 scale
-        x_PT = self.downsample_2(x_PT_2)
+        x_PET = self.downsample_2(x_PET_2)
         x_CT = self.downsample_2(x_CT_2)
         
-        x_PT_3 = self.PT_encoder_3(x_PT, x_CT)
-        x_CT_3 = self.CT_encoder_3(x_CT, x_PT)
+        x_PET_3 = self.PET_encoder_3(x_PET, x_CT)
+        x_CT_3 = self.CT_encoder_3(x_CT, x_PET)
         
         # downsample 1/8 scale
-        x_PT = self.downsample_3(x_PT_3)
+        x_PET = self.downsample_3(x_PET_3)
         x_CT = self.downsample_3(x_CT_3)
         
-        x_PT_4 = self.PT_encoder_4(x_PT, x_CT)
-        x_CT_4 = self.CT_encoder_4(x_CT, x_PT)
+        x_PET_4 = self.PET_encoder_4(x_PET, x_CT)
+        x_CT_4 = self.CT_encoder_4(x_CT, x_PET)
         
         # downsample 1/16 scale
-        x_PT = self.downsample_4(x_PT_4)
+        x_PET = self.downsample_4(x_PET_4)
         x_CT = self.downsample_4(x_CT_4)
         
-        x_PT_5 = self.PT_encoder_5(x_PT, x_CT)
-        x_CT_5 = self.CT_encoder_5(x_CT, x_PT)
+        x_PET_5 = self.PET_encoder_5(x_PET, x_CT)
+        x_CT_5 = self.CT_encoder_5(x_CT, x_PET)
         
         # concatenate
-        x_1 = torch.cat([x_PT_1, x_CT_1], dim=1)
-        x_2 = torch.cat([x_PT_2, x_CT_2], dim=1)
-        x_3 = torch.cat([x_PT_3, x_CT_3], dim=1)
-        x_4 = torch.cat([x_PT_4, x_CT_4], dim=1)
-        x_5 = torch.cat([x_PT_5, x_CT_5], dim=1)
+        x_1 = torch.cat([x_PET_1, x_CT_1], dim=1)
+        x_2 = torch.cat([x_PET_2, x_CT_2], dim=1)
+        x_3 = torch.cat([x_PET_3, x_CT_3], dim=1)
+        x_4 = torch.cat([x_PET_4, x_CT_4], dim=1)
+        x_5 = torch.cat([x_PET_5, x_CT_5], dim=1)
         
         return x_1, x_2, x_3, x_4, x_5
 
     
-class NLA_encoder(nn.Module):
-
-    def __init__(self, 
-                 channel_num: int, 
-                 use_checkpoint: bool = False):
-        super().__init__()
-        
-        self.PT_encoder_1 = Residual_block(in_channels=1, 
-                                           out_channels=channel_num, 
-                                           conv_num=2, 
-                                           use_checkpoint=use_checkpoint)
-        self.CT_encoder_1 = Residual_block(in_channels=1, 
-                                           out_channels=channel_num, 
-                                           conv_num=2, 
-                                           use_checkpoint=use_checkpoint)
-        self.PT_encoder_2 = Residual_block(in_channels=channel_num, 
-                                           out_channels=channel_num*2, 
-                                           conv_num=3, 
-                                           use_checkpoint=use_checkpoint)
-        self.CT_encoder_2 = Residual_block(in_channels=channel_num, 
-                                           out_channels=channel_num*2, 
-                                           conv_num=3, 
-                                           use_checkpoint=use_checkpoint)
-        self.PT_encoder_3 = Residual_block(in_channels=channel_num*2, 
-                                           out_channels=channel_num*4, 
-                                           conv_num=3, 
-                                           use_checkpoint=use_checkpoint)
-        self.CT_encoder_3 = Residual_block(in_channels=channel_num*2, 
-                                           out_channels=channel_num*4, 
-                                           conv_num=3, 
-                                           use_checkpoint=use_checkpoint)
-        self.PT_encoder_4 = Residual_block(in_channels=channel_num*4, 
-                                           out_channels=channel_num*8, 
-                                           conv_num=4, 
-                                           use_checkpoint=use_checkpoint)
-        self.CT_encoder_4 = Residual_block(in_channels=channel_num*4, 
-                                           out_channels=channel_num*8, 
-                                           conv_num=4, 
-                                           use_checkpoint=use_checkpoint)
-        self.PT_encoder_5 = Residual_block(in_channels=channel_num*8, 
-                                           out_channels=channel_num*16, 
-                                           conv_num=4, 
-                                           use_checkpoint=use_checkpoint)
-        self.CT_encoder_5 = Residual_block(in_channels=channel_num*8, 
-                                           out_channels=channel_num*16, 
-                                           conv_num=4, 
-                                           use_checkpoint=use_checkpoint)
-        
-        self.NLA_3 = NonLocalAtten_block(embed_dim=channel_num*4, use_checkpoint=use_checkpoint)
-        self.NLA_4 = NonLocalAtten_block(embed_dim=channel_num*8, use_checkpoint=use_checkpoint)
-        self.NLA_5 = NonLocalAtten_block(embed_dim=channel_num*16, use_checkpoint=use_checkpoint)
-        
-        self.downsample_1 = nn.MaxPool3d(2, stride=2)
-        self.downsample_2 = nn.MaxPool3d(2, stride=2)
-        self.downsample_3 = nn.MaxPool3d(2, stride=2)
-        self.downsample_4 = nn.MaxPool3d(2, stride=2)
-        
-    def forward(self, PT, CT):
-        
-        # full scale
-        x_PT_1 = self.PT_encoder_1(PT)
-        x_CT_1 = self.CT_encoder_1(CT)
-        
-        # downsample 1/2 scale
-        x_PT = self.downsample_1(x_PT_1)
-        x_CT = self.downsample_1(x_CT_1)
-        
-        x_PT_2 = self.PT_encoder_2(x_PT)
-        x_CT_2 = self.CT_encoder_2(x_CT)
-        
-        # downsample 1/4 scale
-        x_PT = self.downsample_2(x_PT_2)
-        x_CT = self.downsample_2(x_CT_2)
-        
-        x_PT = self.PT_encoder_3(x_PT)
-        x_CT = self.CT_encoder_3(x_CT)
-        
-        Atten_PT, Atten_CT = self.NLA_3(x_PT, x_CT)
-        x_PT_3 = x_PT + Atten_PT
-        x_CT_3 = x_CT + Atten_CT
-        
-        # downsample 1/8 scale
-        x_PT = self.downsample_3(x_PT_3)
-        x_CT = self.downsample_3(x_CT_3)
-        
-        x_PT = self.PT_encoder_4(x_PT)
-        x_CT = self.CT_encoder_4(x_CT)
-        
-        Atten_PT, Atten_CT = self.NLA_4(x_PT, x_CT)
-        x_PT_4 = x_PT + Atten_PT
-        x_CT_4 = x_CT + Atten_CT
-        
-        # downsample 1/16 scale
-        x_PT = self.downsample_4(x_PT_4)
-        x_CT = self.downsample_4(x_CT_4)
-        
-        x_PT = self.PT_encoder_5(x_PT)
-        x_CT = self.CT_encoder_5(x_CT)
-        
-        Atten_PT, Atten_CT = self.NLA_5(x_PT, x_CT)
-        x_PT_5 = x_PT + Atten_PT
-        x_CT_5 = x_CT + Atten_CT
-        
-        # concatenate
-        x_1 = torch.cat([x_PT_1, x_CT_1], dim=1)
-        x_2 = torch.cat([x_PT_2, x_CT_2], dim=1)
-        x_3 = torch.cat([x_PT_3, x_CT_3], dim=1)
-        x_4 = torch.cat([x_PT_4, x_CT_4], dim=1)
-        x_5 = torch.cat([x_PT_5, x_CT_5], dim=1)
-        
-        return x_1, x_2, x_3, x_4, x_5
-    
-
-class Conv_encoder(nn.Module):
-
-    def __init__(self, 
-                 in_channels: int, 
-                 channel_num: int, 
-                 use_checkpoint: bool = False):
-        super().__init__()
-        self.in_channels = in_channels
-        
-        self.encoder_1 = Residual_block(in_channels=in_channels, 
-                                        out_channels=channel_num, 
-                                        conv_num=2, 
-                                        use_checkpoint=use_checkpoint)
-        self.encoder_2 = Residual_block(in_channels=channel_num, 
-                                        out_channels=channel_num*2, 
-                                        conv_num=3, 
-                                        use_checkpoint=use_checkpoint)
-        self.encoder_3 = Residual_block(in_channels=channel_num*2, 
-                                        out_channels=channel_num*4, 
-                                        conv_num=3, 
-                                        use_checkpoint=use_checkpoint)
-        self.encoder_4 = Residual_block(in_channels=channel_num*4, 
-                                        out_channels=channel_num*8, 
-                                        conv_num=4, 
-                                        use_checkpoint=use_checkpoint)
-        self.encoder_5 = Residual_block(in_channels=channel_num*8, 
-                                        out_channels=channel_num*16, 
-                                        conv_num=4, 
-                                        use_checkpoint=use_checkpoint)
-        
-        self.downsample_1 = nn.MaxPool3d(2, stride=2)
-        self.downsample_2 = nn.MaxPool3d(2, stride=2)
-        self.downsample_3 = nn.MaxPool3d(2, stride=2)
-        self.downsample_4 = nn.MaxPool3d(2, stride=2)
-        
-    def forward(self, x_in):
-
-        if self.in_channels>1:
-            x_in = torch.cat(x_in, dim=1)
-        
-        # full scale
-        x_1 = self.encoder_1(x_in)
-        
-        # downsample 1/2 scale
-        x = self.downsample_1(x_1)
-        x_2 = self.encoder_2(x)
-        
-        # downsample 1/4 scale
-        x = self.downsample_2(x_2)
-        x_3 = self.encoder_3(x)
-        
-        # downsample 1/8 scale
-        x = self.downsample_3(x_3)
-        x_4 = self.encoder_4(x)
-        
-        # downsample 1/16 scale
-        x = self.downsample_4(x_4)
-        x_5 = self.encoder_5(x)
-        
-        return x_1, x_2, x_3, x_4, x_5
-
-    
-class CoAtten_decoder(nn.Module):
+class Diverging_decoder(nn.Module):
 
     def __init__(self, 
                  in_channels: int,
@@ -469,166 +161,117 @@ class CoAtten_decoder(nn.Module):
                  use_checkpoint: bool = False):
         super().__init__()
         
-        self.decoder_T_6 = Residual_block(in_channels=in_channels*16+in_channels*8, 
-                                          out_channels=channel_num*8, 
-                                          conv_num=4, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_N_6 = Residual_block(in_channels=in_channels*16+in_channels*8, 
-                                          out_channels=channel_num*8, 
-                                          conv_num=4, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_T_7 = Residual_block(in_channels=channel_num*8+in_channels*4, 
-                                          out_channels=channel_num*4, 
-                                          conv_num=3, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_N_7 = Residual_block(in_channels=channel_num*8+in_channels*4, 
-                                          out_channels=channel_num*4, 
-                                          conv_num=3, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_T_8 = Residual_block(in_channels=channel_num*4+in_channels*2, 
-                                          out_channels=channel_num*2, 
-                                          conv_num=3, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_N_8 = Residual_block(in_channels=channel_num*4+in_channels*2, 
-                                          out_channels=channel_num*2, 
-                                          conv_num=3, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_T_9 = Residual_block(in_channels=channel_num*2+in_channels, 
-                                          out_channels=channel_num, 
-                                          conv_num=2, 
-                                          use_checkpoint=use_checkpoint)
-        self.decoder_N_9 = Residual_block(in_channels=channel_num*2+in_channels, 
-                                          out_channels=channel_num, 
-                                          conv_num=2, 
-                                          use_checkpoint=use_checkpoint)
+        
+        self.decoder_PT_5 = Residual_block(in_channels=in_channels*16,
+                                           out_channels=channel_num*16,
+                                           conv_num=4,
+                                           use_checkpoint=use_checkpoint)
+        self.decoder_MLN_5 = Residual_block(in_channels=in_channels*16,
+                                            out_channels=channel_num*16,
+                                            conv_num=4,
+                                            use_checkpoint=use_checkpoint)
+        self.decoder_PT_6 = Residual_block(in_channels=channel_num*16+in_channels*8,
+                                           out_channels=channel_num*8,
+                                           conv_num=4,
+                                           use_checkpoint=use_checkpoint)
+        self.decoder_MLN_6 = Residual_block(in_channels=channel_num*16+in_channels*8,
+                                            out_channels=channel_num*8,
+                                            conv_num=4,
+                                            use_checkpoint=use_checkpoint)
+        self.decoder_PT_7 = Residual_block(in_channels=channel_num*8+in_channels*4,
+                                           out_channels=channel_num*4,
+                                           conv_num=3,
+                                           use_checkpoint=use_checkpoint)
+        self.decoder_MLN_7 = Residual_block(in_channels=channel_num*8+in_channels*4,
+                                            out_channels=channel_num*4,
+                                            conv_num=3,
+                                            use_checkpoint=use_checkpoint)
+        self.decoder_PT_8 = Residual_block(in_channels=channel_num*4+in_channels*2,
+                                           out_channels=channel_num*2,
+                                           conv_num=3,
+                                           use_checkpoint=use_checkpoint)
+        self.decoder_MLN_8 = Residual_block(in_channels=channel_num*4+in_channels*2,
+                                            out_channels=channel_num*2,
+                                            conv_num=3,
+                                            use_checkpoint=use_checkpoint)
+        self.decoder_PT_9 = Residual_block(in_channels=channel_num*2+in_channels,
+                                           out_channels=channel_num,
+                                           conv_num=2,
+                                           use_checkpoint=use_checkpoint)
+        self.decoder_MLN_9 = Residual_block(in_channels=channel_num*2+in_channels,
+                                            out_channels=channel_num,
+                                            conv_num=2,
+                                            use_checkpoint=use_checkpoint)
         
         self.upsample_6 = nn.Upsample(scale_factor=2, mode='nearest')
         self.upsample_7 = nn.Upsample(scale_factor=2, mode='nearest')
         self.upsample_8 = nn.Upsample(scale_factor=2, mode='nearest')
         self.upsample_9 = nn.Upsample(scale_factor=2, mode='nearest')
         
-        self.coatten_gate_6 = CoAtten_gate_block(in_channels*8, in_channels*16, channel_num*8)
-        self.coatten_gate_7 = CoAtten_gate_block(in_channels*4, channel_num*8, channel_num*4)
-        self.coatten_gate_8 = CoAtten_gate_block(in_channels*2, channel_num*4, channel_num*2)
-        self.coatten_gate_9 = CoAtten_gate_block(in_channels, channel_num*2, channel_num)
+        self.atten_gate_6 = Region_Atten_block(in_channels*8, in_channels*16, channel_num*8)
+        self.atten_gate_7 = Region_Atten_block(in_channels*4, channel_num*8, channel_num*4)
+        self.atten_gate_8 = Region_Atten_block(in_channels*2, channel_num*4, channel_num*2)
+        self.atten_gate_9 = Region_Atten_block(in_channels, channel_num*2, channel_num)
         
-        self.Conv_T = nn.Conv3d(channel_num, 1, kernel_size=1, stride=1, padding='same')
-        self.Conv_N = nn.Conv3d(channel_num, 1, kernel_size=1, stride=1, padding='same')
+        self.Conv_PT = nn.Conv3d(channel_num, 1, kernel_size=1, stride=1, padding='same')
+        self.Conv_MLN = nn.Conv3d(channel_num, 1, kernel_size=1, stride=1, padding='same')
         self.Sigmoid = nn.Sigmoid()
         
     def forward(self, x_1, x_2, x_3, x_4, x_5):
 
-        # upsample 1/8 scale
-        x_gate_T, x_gate_N = self.coatten_gate_6(x_4, x_5, x_5)
-        x_up = self.upsample_6(x_5)
-        
-        x = torch.cat([x_gate_T, x_up], dim=1)
-        x_T_6 = self.decoder_T_6(x)
-        x = torch.cat([x_gate_N, x_up], dim=1)
-        x_N_6 = self.decoder_N_6(x)
-    
-        # upsample 1/4 scale
-        x_gate_T, x_gate_N = self.coatten_gate_7(x_3, x_T_6, x_N_6)
-        x_up_T = self.upsample_7(x_T_6)
-        x_up_N = self.upsample_7(x_N_6)
-        
-        x = torch.cat([x_gate_T, x_up_T], dim=1)
-        x_T_7 = self.decoder_T_7(x)
-        x = torch.cat([x_gate_N, x_up_N], dim=1)
-        x_N_7 = self.decoder_N_7(x)
-        
-        # upsample 1/2 scale
-        x_gate_T, x_gate_N = self.coatten_gate_8(x_2, x_T_7, x_N_7)
-        x_up_T = self.upsample_8(x_T_7)
-        x_up_N = self.upsample_8(x_N_7)
-        
-        x = torch.cat([x_gate_T, x_up_T], dim=1)
-        x_T_8 = self.decoder_T_8(x)
-        x = torch.cat([x_gate_N, x_up_N], dim=1)
-        x_N_8 = self.decoder_N_8(x)
-    
-        # full scale
-        x_gate_T, x_gate_N = self.coatten_gate_9(x_1, x_T_8, x_N_8)
-        x_up_T = self.upsample_9(x_T_8)
-        x_up_N = self.upsample_9(x_N_8)
-        
-        x = torch.cat([x_gate_T, x_up_T], dim=1)
-        x_T_9 = self.decoder_T_9(x)
-        x = torch.cat([x_gate_N, x_up_N], dim=1)
-        x_N_9 = self.decoder_N_9(x)
-        
-        # Segmentation output
-        x = self.Conv_T(x_T_9)
-        Seg_T_pred = self.Sigmoid(x)
-        
-        x = self.Conv_T(x_N_9)
-        Seg_N_pred = self.Sigmoid(x)
-        
-        Surv_feature = [x_T_6, x_T_7, x_T_8, x_T_9, x_N_6, x_N_7, x_N_8, x_N_9]
-        return Seg_T_pred, Seg_N_pred, Surv_feature
-    
-    
-class Conv_decoder(nn.Module):
-
-    def __init__(self, 
-                 in_channels: int,
-                 channel_num: int, 
-                 out_channels: int, 
-                 use_checkpoint: bool = False):
-        super().__init__()
-        
-        self.decoder_6 = Residual_block(in_channels=in_channels*16+in_channels*8, 
-                                        out_channels=channel_num*8, 
-                                        conv_num=4, 
-                                        use_checkpoint=use_checkpoint)
-        self.decoder_7 = Residual_block(in_channels=channel_num*8+in_channels*4, 
-                                        out_channels=channel_num*4, 
-                                        conv_num=3, 
-                                        use_checkpoint=use_checkpoint)
-        self.decoder_8 = Residual_block(in_channels=channel_num*4+in_channels*2, 
-                                        out_channels=channel_num*2, 
-                                        conv_num=3, 
-                                        use_checkpoint=use_checkpoint)
-        self.decoder_9 = Residual_block(in_channels=channel_num*2+in_channels, 
-                                        out_channels=channel_num, 
-                                        conv_num=2, 
-                                        use_checkpoint=use_checkpoint)
-        
-        self.upsample_6 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.upsample_7 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.upsample_8 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.upsample_9 = nn.Upsample(scale_factor=2, mode='nearest')
-        
-        self.Conv = nn.Conv3d(channel_num, out_channels, kernel_size=1, stride=1, padding='same')
-        self.Sigmoid = nn.Sigmoid()
-        
-    def forward(self, x_1, x_2, x_3, x_4, x_5):
+        # 1/16 scale
+        x_PT_5 = self.decoder_PT_5(x_5)
+        x_MLN_5 = self.decoder_MLN_5(x_5)
 
         # upsample 1/8 scale
-        x_up = self.upsample_6(x_5)
-        x = torch.cat([x_4, x_up], dim=1)
-        x_6 = self.decoder_6(x)
+        x_gate_PT, x_gate_MLN = self.atten_gate_6(x_4, x_PT_5, x_MLN_5)
+        x_up_PT = self.upsample_6(x_PT_5)
+        x_up_MLN = self.upsample_6(x_MLN_5)
+        
+        x = torch.cat([x_gate_PT, x_up_PT], dim=1)
+        x_PT_6 = self.decoder_PT_6(x)
+        x = torch.cat([x_gate_MLN, x_up_MLN], dim=1)
+        x_MLN_6 = self.decoder_MLNN_6(x)
     
         # upsample 1/4 scale
-        x_up = self.upsample_7(x_6)
-        x = torch.cat([x_3, x_up], dim=1)
-        x_7 = self.decoder_7(x)
+        x_gate_PT, x_gate_MLN = self.atten_gate_7(x_3, x_PT_6, x_MLN_6)
+        x_up_PT = self.upsample_7(x_PT_6)
+        x_up_MLN = self.upsample_7(x_MLN_6)
+        
+        x = torch.cat([x_gate_PT, x_up_PT], dim=1)
+        x_PT_7 = self.decoder_PT_7(x)
+        x = torch.cat([x_gate_MLN, x_up_MLN], dim=1)
+        x_MLN_7 = self.decoder_MLN_7(x)
         
         # upsample 1/2 scale
-        x_up = self.upsample_8(x_7)
-        x = torch.cat([x_2, x_up], dim=1)
-        x_8 = self.decoder_8(x)
+        x_gate_PT, x_gate_MLN = self.atten_gate_8(x_2, x_PT_7, x_MLN_7)
+        x_up_PT = self.upsample_8(x_PT_7)
+        x_up_MLN = self.upsample_8(x_MLN_7)
+        
+        x = torch.cat([x_gate_PT, x_up_PT], dim=1)
+        x_PT_8 = self.decoder_PT_8(x)
+        x = torch.cat([x_gate_MLN, x_up_MLN], dim=1)
+        x_MLN_8 = self.decoder_MLN_8(x)
     
         # full scale
-        x_up = self.upsample_9(x_8)
-        x = torch.cat([x_1, x_up], dim=1)
-        x_9 = self.decoder_9(x)
+        x_gate_PT, x_gate_MLN = self.atten_gate_9(x_1, x_PT_8, x_MLN_8)
+        x_up_PT = self.upsample_9(x_PT_8)
+        x_up_MLN = self.upsample_9(x_MLN_8)
+        
+        x = torch.cat([x_gate_PT, x_up_PT], dim=1)
+        x_PT_9 = self.decoder_PT_9(x)
+        x = torch.cat([x_gate_MLN, x_up_MLN], dim=1)
+        x_MLN_9 = self.decoder_MLN_9(x)
         
         # Segmentation output
-        x = self.Conv(x_9)
-        Seg_pred = self.Sigmoid(x)
+        x = self.Conv_PT(x_PT_9)
+        Seg_PT_pred = self.Sigmoid(x)
         
-        return Seg_pred, x_6, x_7, x_8, x_9
+        x = self.Conv_MLN(x_MLN_9)
+        Seg_MLN_pred = self.Sigmoid(x)
+        
+        Surv_feature = [x_PT_6, x_PT_7, x_PT_8, x_PT_9, x_MLN_6, x_MLN_7, x_MLN_8, x_MLN_9]
+        return Seg_PT_pred, Seg_MLN_pred, Surv_feature
     
     
 class Surv_head(nn.Module):
@@ -672,7 +315,7 @@ class Surv_head(nn.Module):
     
 #-------------------------------------------------------------------------------------- 
 
-class Colearn_Hybrid_block(nn.Module):
+class Cross_Hybrid_block(nn.Module):
 
     def __init__(self, 
                  in_channels: int, 
@@ -710,7 +353,7 @@ class Colearn_Hybrid_block(nn.Module):
         return x_out
 
 
-class Hybrid_block(nn.Module):
+class Self_Hybrid_block(nn.Module):
 
     def __init__(self, 
                  in_channels: int, 
@@ -744,65 +387,9 @@ class Hybrid_block(nn.Module):
         
         x_out = x_conv + x_trans
         return x_out
-    
-    
-class NonLocalAtten_block(nn.Module):
-
-    def __init__(self, 
-                 embed_dim: int, 
-                 dropout_rate: float = 0.0,
-                 use_checkpoint: bool = False):
-        super().__init__()
-        self.use_checkpoint = use_checkpoint
-        
-        self.q_proj = nn.Linear(embed_dim*2, embed_dim * 2)
-        self.k_proj = nn.Conv3d(embed_dim * 2, embed_dim * 2, kernel_size=2, stride=2)
-        self.v_proj = nn.Conv3d(embed_dim * 2, embed_dim * 2, kernel_size=2, stride=2)
-        self.out_proj = nn.Linear(embed_dim*2, embed_dim*2)
-        
-        self.drop_weights = nn.Dropout(dropout_rate)
-        self.drop_output = nn.Dropout(dropout_rate)
-    
-    def NLA_forward(self, x_1, x_2):
-        
-        b, c, d, h, w = x_1.shape
-        x = torch.cat([x_1, x_2], dim=1)
-        
-        k = self.k_proj(x)
-        k = k.flatten(2).transpose(-1, -2)
-        v = self.v_proj(x)
-        v = v.flatten(2).transpose(-1, -2)
-        
-        x = x.flatten(2).transpose(-1, -2)
-        q = self.q_proj(x)
-        
-        x = torch.einsum("bxd,byd->bxy", q, k).softmax(dim=-1)
-        att_mat = self.drop_weights(x)
-        
-        att_v = torch.einsum("bxy,byd->bxd", att_mat, v)
-        
-        x = self.out_proj(att_v)
-        x_out = self.drop_output(x)
-        
-        x_out_1 = x_out[:,:,0:c]
-        x_out_1 = x_out_1.view((b,d,h,w,c)).permute((0, 4, 1, 2, 3)).contiguous()
-        
-        x_out_2 = x_out[:,:,c:2*c]
-        x_out_2 = x_out_2.view((b,d,h,w,c)).permute((0, 4, 1, 2, 3)).contiguous()
-        
-        return x_out_1, x_out_2
-    
-    def forward(self, x_1, x_2):
-        
-        if self.use_checkpoint and x_1.requires_grad and x_2.requires_grad:
-            x_out_1, x_out_2 = checkpoint.checkpoint(self.NLA_forward, x_1, x_2)
-        else:
-            x_out_1, x_out_2 = self.NLA_forward(x_1, x_2)
-            
-        return x_out_1, x_out_2
 
     
-class CoAtten_gate_block(nn.Module):
+class Region_Atten_block(nn.Module):
 
     def __init__(self, channel_x, channel_g, channel_num):
         super().__init__()
@@ -999,19 +586,19 @@ class SwinTrans_Block(nn.Module):
                          
         self.norm1 = nn.LayerNorm(embed_dim)  
         if cross_atten:
-            self.attn = WMCA_block(embed_dim,
-                                   window_size=window_size,
-                                   num_heads=num_heads,
-                                   qkv_bias=qkv_bias,
-                                   attn_drop=attn_drop,
-                                   proj_drop=drop)
+            self.attn = MCA_block(embed_dim,
+                                  window_size=window_size,
+                                  num_heads=num_heads,
+                                  qkv_bias=qkv_bias,
+                                  attn_drop=attn_drop,
+                                  proj_drop=drop)
         else:
-            self.attn = WMSA_block(embed_dim,
-                                   window_size=window_size,
-                                   num_heads=num_heads,
-                                   qkv_bias=qkv_bias,
-                                   attn_drop=attn_drop,
-                                   proj_drop=drop)
+            self.attn = MSA_block(embed_dim,
+                                  window_size=window_size,
+                                  num_heads=num_heads,
+                                  qkv_bias=qkv_bias,
+                                  attn_drop=attn_drop,
+                                  proj_drop=drop)
 
         self.norm2 = nn.LayerNorm(embed_dim)
         self.mlp = MLP_block(hidden_size=embed_dim, 
@@ -1087,7 +674,7 @@ class SwinTrans_Block(nn.Module):
         return x_out
 
 
-class WMSA_block(nn.Module):
+class MSA_block(nn.Module):
 
     def __init__(self,
                  embed_dim: int,
@@ -1162,7 +749,7 @@ class WMSA_block(nn.Module):
         return x_out
     
 
-class WMCA_block(nn.Module):
+class MCA_block(nn.Module):
 
     def __init__(self,
                  embed_dim: int,
