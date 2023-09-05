@@ -208,7 +208,7 @@ class Diverging_decoder(nn.Module):
         self.upsample_8 = nn.Upsample(scale_factor=2, mode='nearest')
         self.upsample_9 = nn.Upsample(scale_factor=2, mode='nearest')
         
-        self.atten_gate_6 = Region_Atten_block(in_channels*8, in_channels*16, channel_num*8)
+        self.atten_gate_6 = Region_Atten_block(in_channels*8, channel_num*16, channel_num*8)
         self.atten_gate_7 = Region_Atten_block(in_channels*4, channel_num*8, channel_num*4)
         self.atten_gate_8 = Region_Atten_block(in_channels*2, channel_num*4, channel_num*2)
         self.atten_gate_9 = Region_Atten_block(in_channels, channel_num*2, channel_num)
