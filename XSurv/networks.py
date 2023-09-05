@@ -231,7 +231,7 @@ class Diverging_decoder(nn.Module):
         x = torch.cat([x_gate_PT, x_up_PT], dim=1)
         x_PT_6 = self.decoder_PT_6(x)
         x = torch.cat([x_gate_MLN, x_up_MLN], dim=1)
-        x_MLN_6 = self.decoder_MLNN_6(x)
+        x_MLN_6 = self.decoder_MLN_6(x)
     
         # upsample 1/4 scale
         x_gate_PT, x_gate_MLN = self.atten_gate_7(x_3, x_PT_6, x_MLN_6)
