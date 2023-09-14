@@ -33,7 +33,7 @@ def gen_process(gen):
 def gen_load(data_path, sample_names, batch_size=2, balance_censored_sample=False):
 
     while True:
-        if balance_cencored_sample == True:
+        if balance_censored_sample == True:
             # manually balance censored and uncensored samples in each batch
             idxes = []
             num_pos = num_neg = 0
