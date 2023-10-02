@@ -7,4 +7,4 @@ We propose a merging-diverging learning framework for survival prediction from m
 
 ## Publication
 If this repository helps your work, please kindly cite our paper:
-* **Mingyuan Meng, Lei Bi, Michael Fulham, Dagan Feng, Jinman Kim, "Merging-Diverging Hybrid Transformer Networks for Survival Prediction in Head and Neck Cancer," International Conference on Medical Image Computing and Computer Assisted Intervention (MICCAI), 2023. [[arXiv](https://arxiv.org/abs/2307.03427)]**
+* **Mingyuan Meng, Lei Bi, Michael Fulham, Dagan Feng, Jinman Kim, "Merging-Diverging Hybrid Transformer Networks for Survival Prediction in Head and Neck Cancer," International Conference on Medical Image Computing and Computer Assisted Intervention (MICCAI), pp. 400-410, 2023, doi: 10.1007/978-3-031-43987-2_39. [[Springer](https://link.springer.com/chapter/10.1007/978-3-031-43987-2_39)] [[arXiv](https://arxiv.org/abs/2307.03427)]**
